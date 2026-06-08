@@ -1,18 +1,11 @@
 # Forum post draft
 
-Paste this into the Home Assistant Community forum under **Share your
-Projects!** (community.home-assistant.io). Replace the GitHub URL first.
-Trim/reword to taste — keep it personal, the community responds well to that.
-
----
-
 **Title:** Enemalta (Malta) electricity tariff cost calculator — running €
 cost from your energy sensor
 
 **Body:**
-
 If you're in Malta and on Home Assistant, you've probably wanted to see what
-your energy use is actually *costing* against Enemalta's banded tariffs. Those
+your energy use is actually *costing* against Enemalta's complicated banded tariffs. Those
 bands are cumulative per billing year and the marginal rate climbs as you use
 more, so a flat "kWh × price" sensor doesn't cut it.
 
