@@ -4,7 +4,7 @@
 # Calculates the running cost of electricity consumption against Enemalta's
 # (Malta) Residential, Domestic and Non-Residential cumulative band tariffs.
 #
-# Project:  https://github.com/YOUR_USERNAME/ha-enemalta-tariff
+# Project:  https://github.com/beta-j/ha-enemalta-tariff
 # Licence:  MIT
 # Source:   Rates transcribed from enemalta.com.mt — see RATES SECTION below
 #           for the exact pages and the Enemalta revision date they match.
