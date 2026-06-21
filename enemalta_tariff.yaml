@@ -1,55 +1,55 @@
 # ============================================================================
-# Enemalta Tariff Cost Calculator — Home Assistant Package
+# Enemalta Tariff Cost Calculator — Home Assistant Package — v2.0.0
 # ============================================================================
-# Calculates the running cost of electricity consumption against Enemalta's
-# (Malta) Residential, Domestic and Non-Residential cumulative band tariffs.
+# Estimates the cost of electricity consumption against Enemalta's (Malta)
+# tariffs, with bands PRO-RATED to your actual billing period (as ARMS bills).
 #
 # Project:  https://github.com/beta-j/ha-enemalta-tariff
 # Licence:  MIT
-# Source:   Rates transcribed from enemalta.com.mt — see RATES SECTION below
-#           for the exact pages and the Enemalta revision date they match.
 #
 # ⚠ INFORMATION ONLY. Verify against your ARMS bill. In any discrepancy the
 #   Electricity Connection and Supply Regulations (S.L.545.41) prevail.
 # ----------------------------------------------------------------------------
-# QUICK INSTALL — see README.md for full details.
-#   1. Copy this file to:  <config>/packages/enemalta_tariff.yaml
-#   2. In configuration.yaml:
-#        homeassistant:
-#          packages: !include_dir_named packages
-#   3. Set `source:` in the utility_meter (below) to YOUR energy sensor.
-#   4. If your sensor reads in Wh not kWh, enable the converter (Section B).
-#   5. Restart HA, then set the helpers (Settings > Devices & Services >
-#      Helpers).
+# WHY v2: Enemalta does NOT use a single annual cumulative band. Each bill
+# receives a PRO-RATA slice of every band's annual allowance, scaled by the
+# number of days in that billing period:
+#
+#     period_allowance = annual_allowance / 365 * days_in_period
+#
+# ARMS billing cycles are irregular (observed 59-70 days), so this package
+# CANNOT know your period automatically — you must set the billing-period
+# START DATE helper, and RESET the meter when each new bill period begins.
+# The mandatory service charge is also pro-rated by days and included.
+# ----------------------------------------------------------------------------
+# QUICK INSTALL — see README.md.
+#   1. Copy to:  <config>/packages/enemalta_tariff.yaml
+#   2. configuration.yaml:  homeassistant: { packages: !include_dir_named packages }
+#   3. Set `source:` in SECTION C to your kWh sensor.
+#   4. Restart, set the helpers, set the billing-period start date.
 # ============================================================================
 
 
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║  RATES SECTION — EDIT HERE WHEN ENEMALTA CHANGES TARIFFS               ║
-# ║  Matches Enemalta pages as revised: 2026-02-06 (Res/Dom),             ║
-# ║  2026-04-24 (Non-Res). Update CHANGELOG.md when you change these.     ║
-# ║                                                                        ║
-# ║  These are documented here for maintainers. The actual values live    ║
-# ║  in the template below (Jinja can't read top-level YAML anchors into  ║
-# ║  templates), so update BOTH this reference block AND the template.    ║
-# ║                                                                        ║
-# ║  RESIDENTIAL (incl. 5% VAT)          DOMESTIC (incl. 5% VAT)          ║
-# ║   0–2,000      0.1047                 0–2,000      0.1365             ║
-# ║   2,001–6,000  0.1298                 2,001–6,000  0.1673             ║
-# ║   6,001–10,000 0.1607                 6,001–10,000 0.2023             ║
-# ║   10,001–20,000 0.3420                10,001–20,000 0.4180            ║
-# ║   20,001+      0.6076                 20,001+      0.6860             ║
-# ║                                                                        ║
-# ║  NON-RESIDENTIAL kWh (excl. VAT)                                       ║
-# ║   0–2,000 0.1215 | 2,001–6,000 0.1275 | 6,001–10,000 0.1373          ║
-# ║   10,001–20,000 0.1485 | 20,001–60,000 0.1613 | 60,001–100,000 0.1500║
-# ║   100,001–1,000,000 0.1403 | 1,000,001–5,000,000 0.1275 | 5M+ 0.1080 ║
-# ║                                                                        ║
-# ║  RESIDENTIAL ECO-REDUCTION (primary residence only):                  ║
-# ║   1 person:  25% on all consumption IF annual < 2,000 units          ║
-# ║   2+ people (if annual <= 1,750/person): 25% on first 1,000 units,   ║
-# ║             15% on next 750 units                                     ║
-# ╚══════════════════════════════════════════════════════════════════════╝
+# +======================================================================+
+# |  RATES SECTION — EDIT WHEN ENEMALTA CHANGES TARIFFS                   |
+# |  Res/Dom pages revised 2026-02-06; Non-Res revised 2026-04-24.        |
+# |  Annual band allowances (upper edges, kWh) are the SAME for all       |
+# |  tariffs: 2000 / 6000 / 10000 / 20000 (Non-Res adds 60000 / 100000 /  |
+# |  1,000,000 / 5,000,000). These get pro-rated by days in SECTION D.    |
+# |                                                                       |
+# |  RESIDENTIAL (incl 5% VAT)   DOMESTIC (incl 5% VAT)                    |
+# |   0.1047 0.1298 0.1607        0.1365 0.1673 0.2023                     |
+# |   0.3420 0.6076               0.4180 0.6860                            |
+# |  NON-RESIDENTIAL (excl VAT): 0.1215 0.1275 0.1373 0.1485 0.1613       |
+# |   0.1500 0.1403 0.1275 0.1080                                          |
+# |                                                                       |
+# |  SERVICE CHARGE / YEAR (Res/Dom incl VAT): single 65.00, triple 195   |
+# |                          (Non-Res excl VAT): single 120, triple 360   |
+# |                                                                       |
+# |  ECO-REDUCTION (Residential primary residence, pro-rated by days):    |
+# |   1 person:  25% on all units IF annualised use < 2,000               |
+# |   2+ (if annualised <= 1,750/person): 25% on first 1,000 units/yr,    |
+# |          15% on next 750 — applied to the period's pro-rata share.    |
+# +======================================================================+
 
 
 # ---------------------------------------------------------------------------
@@ -58,12 +58,15 @@
 input_select:
   enemalta_tariff_type:
     name: Enemalta Tariff Type
-    options:
-      - Residential
-      - Domestic
-      - Non-Residential
+    options: [Residential, Domestic, Non-Residential]
     initial: Residential
     icon: mdi:transmission-tower
+
+  enemalta_phase:
+    name: Enemalta Supply Phase
+    options: [Single, Triple]
+    initial: Single
+    icon: mdi:sine-wave
 
 input_number:
   enemalta_residents:
@@ -91,14 +94,23 @@ input_boolean:
     initial: true
     icon: mdi:home-heart
 
+  enemalta_include_service_charge:
+    name: Enemalta Include Service Charge
+    initial: true
+    icon: mdi:receipt-text
+
+# Billing-period START date. Reset this (and the meter) when a new bill
+# period begins. Day count is measured from here to now.
+input_datetime:
+  enemalta_period_start:
+    name: Enemalta Billing Period Start
+    has_date: true
+    has_time: false
+    icon: mdi:calendar-start
+
 
 # ---------------------------------------------------------------------------
-# SECTION B — OPTIONAL Wh→kWh CONVERTER
-# ---------------------------------------------------------------------------
-# If your energy sensor reports in Wh (e.g. many LocalTuya / Tuya plugs),
-# uncomment this block and point the utility_meter (Section C) at
-# sensor.energy_kwh_for_enemalta instead of your raw sensor.
-# Change the source entity_id below to YOUR Wh sensor.
+# SECTION B — OPTIONAL Wh to kWh CONVERTER (uncomment if your sensor is in Wh)
 # ---------------------------------------------------------------------------
 # template:
 #   - sensor:
@@ -111,26 +123,24 @@ input_boolean:
 #           {{ states('sensor.CHANGE_ME_wh_sensor') not in
 #              ['unknown','unavailable','none'] }}
 #         state: >
-#           {{ (states('sensor.CHANGE_ME_wh_sensor') | float(0) / 1000)
-#              | round(3) }}
+#           {{ (states('sensor.CHANGE_ME_wh_sensor') | float(0) / 1000) | round(3) }}
 
 
 # ---------------------------------------------------------------------------
-# SECTION C — UTILITY METER (tracks consumption within the billing YEAR)
+# SECTION C — UTILITY METER (consumption within the current BILLING PERIOD)
 # ---------------------------------------------------------------------------
-# CHANGE `source:` to your cumulative kWh sensor. If using the converter
-# above, set it to: sensor.energy_kwh_for_enemalta
-# `offset:` shifts the cycle start if your ARMS billing year != 1 Jan.
+# NOTE: no `cycle:` — you reset this manually when each bill period starts,
+# at the same time you update the period-start date helper. Use the service:
+#   action: utility_meter.reset
+#   target: { entity_id: sensor.enemalta_period_energy }
 # ---------------------------------------------------------------------------
 utility_meter:
-  enemalta_yearly_energy:
-    source: sensor.CHANGE_ME_total_energy_kwh
-    cycle: yearly
-    # offset: { days: 0 }
+  enemalta_period_energy:
+    source: sensor.CHANGE_ME_total_energy_kwh   # <-- your cumulative kWh sensor
 
 
 # ---------------------------------------------------------------------------
-# SECTION D — COST CALCULATION ENGINE (no need to edit unless rates change)
+# SECTION D — COST ENGINE (pro-rata bands + service charge)
 # ---------------------------------------------------------------------------
 template:
   - sensor:
@@ -141,63 +151,83 @@ template:
         state_class: total
         icon: mdi:cash-multiple
         availability: >
-          {{ states('sensor.enemalta_yearly_energy') not in
+          {{ states('sensor.enemalta_period_energy') not in
              ['unknown','unavailable','none'] }}
         state: >
-          {% set kwh = states('sensor.enemalta_yearly_energy') | float(0) %}
+          {% set kwh = states('sensor.enemalta_period_energy') | float(0) %}
           {% set ttype = states('input_select.enemalta_tariff_type') %}
+          {% set phase = states('input_select.enemalta_phase') %}
           {% set residents = states('input_number.enemalta_residents') | int(0) %}
           {% set primary = is_state('input_boolean.enemalta_primary_residence','on') %}
+          {% set inc_sc = is_state('input_boolean.enemalta_include_service_charge','on') %}
           {% set vat = states('input_number.enemalta_vat_percent') | float(0) %}
 
+          {% set start = states('input_datetime.enemalta_period_start') %}
+          {% if start not in ['unknown','unavailable','none',''] %}
+            {% set days = (now() - strptime(start, '%Y-%m-%d').replace(tzinfo=now().tzinfo)).days + 1 %}
+          {% else %}
+            {% set days = 1 %}
+          {% endif %}
+          {% set days = [days, 1] | max %}
+          {% set f = days / 365 %}
+
           {% if ttype == 'Residential' %}
-            {% set bands = [[2000,0.1047],[6000,0.1298],[10000,0.1607],
-                            [20000,0.3420],[10**12,0.6076]] %}
+            {% set bands = [[2000,0.1047],[6000,0.1298],[10000,0.1607],[20000,0.3420],[10**12,0.6076]] %}
             {% set apply_vat = false %}
           {% elif ttype == 'Domestic' %}
-            {% set bands = [[2000,0.1365],[6000,0.1673],[10000,0.2023],
-                            [20000,0.4180],[10**12,0.6860]] %}
+            {% set bands = [[2000,0.1365],[6000,0.1673],[10000,0.2023],[20000,0.4180],[10**12,0.6860]] %}
             {% set apply_vat = false %}
           {% else %}
-            {% set bands = [[2000,0.1215],[6000,0.1275],[10000,0.1373],
-                            [20000,0.1485],[60000,0.1613],[100000,0.1500],
-                            [1000000,0.1403],[5000000,0.1275],[10**12,0.1080]] %}
+            {% set bands = [[2000,0.1215],[6000,0.1275],[10000,0.1373],[20000,0.1485],[60000,0.1613],[100000,0.1500],[1000000,0.1403],[5000000,0.1275],[10**12,0.1080]] %}
             {% set apply_vat = true %}
           {% endif %}
 
           {% set ns = namespace(cost=0.0, lower=0.0) %}
           {% for b in bands %}
+            {% set upper = b[0] * f %}
             {% if kwh > ns.lower %}
-              {% set seg = [kwh, b[0]] | min - ns.lower %}
+              {% set seg = [kwh, upper] | min - ns.lower %}
               {% set ns.cost = ns.cost + seg * b[1] %}
-              {% set ns.lower = b[0] %}
+              {% set ns.lower = upper %}
             {% endif %}
           {% endfor %}
 
+          {# Eco-Reduction — logic validated against real ARMS bills:
+             gate on annualised consumption <= 1750 * residents; 25% on units
+             within the pro-rata band-1 allowance (at band-1 rate), 15% on
+             units above that (at the band rate those units fall in). #}
           {% set ns2 = namespace(eco=0.0) %}
           {% if ttype == 'Residential' and primary and residents >= 1 %}
-            {% set day = now().timetuple().tm_yday %}
-            {% set annual_est = kwh / day * 365 if day > 0 else kwh %}
-            {% set frac = kwh / annual_est if annual_est > 0 else 0 %}
-            {% set band1_rate = 0.1047 %}
-            {% if residents == 1 %}
-              {% if annual_est < 2000 %}
-                {% set elig = [kwh, 2000] | min %}
-                {% set ns2.eco = elig * band1_rate * 0.25 %}
-              {% endif %}
-            {% else %}
-              {% set cap = 1750 * residents %}
-              {% if annual_est <= cap %}
-                {% set disc1 = [annual_est, 1000] | min %}
-                {% set disc2 = [[annual_est - 1000, 750] | min, 0] | max %}
-                {% set annual_eco = disc1 * band1_rate * 0.25
-                                  + disc2 * band1_rate * 0.15 %}
-                {% set ns2.eco = annual_eco * frac %}
+            {% set annual_est = kwh / days * 365 %}
+            {% set cap = 2000 if residents == 1 else 1750 * residents %}
+            {% if annual_est <= cap %}
+              {% set b1 = 2000 * f %}
+              {% if residents == 1 %}
+                {# single person: 25% on all consumption (within band 1) #}
+                {% set ns2.eco = [kwh, b1] | min * 0.1047 * 0.25 %}
+              {% else %}
+                {# 25% tranche: units within pro-rata band-1 allowance #}
+                {% set ns2.eco = [kwh, b1] | min * 0.1047 * 0.25 %}
+                {# 15% tranche: units above band1, at band-2 rate #}
+                {% if kwh > b1 %}
+                  {% set t2 = [kwh - b1, 6000 * f - b1] | min %}
+                  {% set ns2.eco = ns2.eco + t2 * 0.1298 * 0.15 %}
+                {% endif %}
               {% endif %}
             {% endif %}
           {% endif %}
 
           {% set subtotal = ns.cost - ns2.eco %}
+
+          {% if inc_sc %}
+            {% if ttype == 'Non-Residential' %}
+              {% set sc_annual = 120 if phase == 'Single' else 360 %}
+            {% else %}
+              {% set sc_annual = 65 if phase == 'Single' else 195 %}
+            {% endif %}
+            {% set subtotal = subtotal + sc_annual / 365 * days %}
+          {% endif %}
+
           {% if apply_vat %}
             {% set subtotal = subtotal * (1 + vat / 100) %}
           {% endif %}
@@ -205,40 +235,24 @@ template:
 
         attributes:
           tariff_type: "{{ states('input_select.enemalta_tariff_type') }}"
-          consumption_kwh_ytd: "{{ states('sensor.enemalta_yearly_energy') | float(0) | round(1) }}"
-          gross_cost_eur: >
-            {% set kwh = states('sensor.enemalta_yearly_energy') | float(0) %}
-            {% set ttype = states('input_select.enemalta_tariff_type') %}
-            {% if ttype == 'Residential' %}
-              {% set bands = [[2000,0.1047],[6000,0.1298],[10000,0.1607],[20000,0.3420],[10**12,0.6076]] %}
-            {% elif ttype == 'Domestic' %}
-              {% set bands = [[2000,0.1365],[6000,0.1673],[10000,0.2023],[20000,0.4180],[10**12,0.6860]] %}
+          consumption_kwh: "{{ states('sensor.enemalta_period_energy') | float(0) | round(1) }}"
+          period_days: >
+            {% set start = states('input_datetime.enemalta_period_start') %}
+            {% if start not in ['unknown','unavailable','none',''] %}
+              {{ (now() - strptime(start,'%Y-%m-%d').replace(tzinfo=now().tzinfo)).days + 1 }}
             {% else %}
-              {% set bands = [[2000,0.1215],[6000,0.1275],[10000,0.1373],[20000,0.1485],[60000,0.1613],[100000,0.1500],[1000000,0.1403],[5000000,0.1275],[10**12,0.1080]] %}
+              unknown
             {% endif %}
-            {% set ns = namespace(cost=0.0, lower=0.0) %}
-            {% for b in bands %}
-              {% if kwh > ns.lower %}
-                {% set seg = [kwh, b[0]] | min - ns.lower %}
-                {% set ns.cost = ns.cost + seg * b[1] %}
-                {% set ns.lower = b[0] %}
-              {% endif %}
-            {% endfor %}
-            {{ ns.cost | round(2) }}
-          current_band: >
-            {% set kwh = states('sensor.enemalta_yearly_energy') | float(0) %}
-            {% set ttype = states('input_select.enemalta_tariff_type') %}
-            {% if ttype == 'Non-Residential' %}
-              {% set edges = [2000,6000,10000,20000,60000,100000,1000000,5000000] %}
+          band1_allowance_this_period: >
+            {% set start = states('input_datetime.enemalta_period_start') %}
+            {% if start not in ['unknown','unavailable','none',''] %}
+              {% set days = (now() - strptime(start,'%Y-%m-%d').replace(tzinfo=now().tzinfo)).days + 1 %}
+              {{ (2000 / 365 * ([days,1]|max)) | round(2) }}
             {% else %}
-              {% set edges = [2000,6000,10000,20000] %}
+              unknown
             {% endif %}
-            {% set ns = namespace(band=1) %}
-            {% for e in edges %}
-              {% if kwh > e %}{% set ns.band = loop.index + 1 %}{% endif %}
-            {% endfor %}
-            {{ ns.band }}
           note: >
-            Residential/Domestic rates incl. 5% VAT. Non-Residential excl. VAT
-            (VAT added per helper). Eco-Reduction is an annualised estimate.
-            Bands reset on the billing-year cycle of the utility_meter.
+            Bands pro-rated to the billing period (annual_allowance/365*days).
+            Reset the meter + period-start date when each ARMS bill period
+            begins. Res/Dom incl 5% VAT; Non-Res excl VAT. Service charge and
+            Eco-Reduction pro-rated by days. Estimate only - verify vs bill.

@@ -19,17 +19,27 @@ and is easy to inspect and adjust.
 
 ## How it works
 
-Enemalta charges on **cumulative consumption bands that reset each billing
-year** — the more you use over the year, the higher the marginal rate on the
-top units. This package:
+Enemalta charges on consumption bands, but **each bill gets a pro-rata slice
+of every band's annual allowance**, scaled by the number of days in that
+billing period:
 
-1. Wraps your cumulative energy sensor in a **yearly `utility_meter`** so it
-   tracks consumption *within the current billing year* (and resets annually).
-2. Walks the bands and sums the cost **marginally**, band by band — exactly how
-   Enemalta bills.
-3. For Residential primary residences, subtracts an **Eco-Reduction estimate**
-   based on registered residents (annualised pro-rata, since the thresholds
-   are defined per year).
+```
+period_allowance = annual_allowance / 365 × days_in_period
+```
+
+For example, band 1's 2,000-unit annual allowance over a 59-day bill becomes
+`2000 / 365 × 59 = 323.288` units at the band-1 rate for that bill. ARMS
+billing cycles are **irregular** (commonly 59–70 days), so the package can't
+work this out on its own — you tell it your **billing-period start date** and
+**reset the meter** when each new period begins. This package:
+
+1. Tracks consumption within the current **billing period** via a
+   `utility_meter` you reset each period.
+2. Pro-rates every band edge by the days elapsed, then prices **marginally**,
+   band by band.
+3. Adds the **mandatory service charge**, also pro-rated by days.
+4. For Residential primary residences, subtracts a pro-rated **Eco-Reduction**
+   estimate based on registered residents.
 
 ---
 
@@ -62,9 +72,8 @@ top units. This package:
 
    ```yaml
    utility_meter:
-     enemalta_yearly_energy:
+     enemalta_period_energy:
        source: sensor.CHANGE_ME_total_energy_kwh   # <-- your kWh sensor
-       cycle: yearly
    ```
 
 4. *(Optional)* If your sensor reads in **Wh**, uncomment `SECTION B` (the
@@ -72,6 +81,17 @@ top units. This package:
    `source:` at `sensor.energy_kwh_for_enemalta`.
 
 5. **Developer Tools → YAML → Check Configuration**, then **Restart**.
+
+6. Set the **Enemalta Billing Period Start** helper to the start date shown on
+   your current ARMS bill, and reset the meter so it counts from now:
+
+   ```yaml
+   action: utility_meter.reset
+   target:
+     entity_id: sensor.enemalta_period_energy
+   ```
+
+   Repeat step 6 each time a new bill period begins.
 
 ---
 
@@ -85,6 +105,9 @@ After restarting, set values under **Settings → Devices & Services → Helpers
 | **Enemalta Registered Residents** | People registered on the ARMS service (drives Eco-Reduction) |
 | **Enemalta Primary Residence** | On = eligible for Eco-Reduction |
 | **Enemalta VAT Percent** | Only used for Non-Residential (rates there are ex-VAT) |
+| **Enemalta Supply Phase** | `Single` / `Triple` — sets the service charge |
+| **Enemalta Include Service Charge** | On = add the mandatory pro-rated service charge |
+| **Enemalta Billing Period Start** | Start date of your current ARMS bill (drives pro-rata) |
 
 Add these plus `sensor.enemalta_electricity_cost` to a dashboard
 (Entities card) to see the running cost and change settings inline.
@@ -93,14 +116,14 @@ Add these plus `sensor.enemalta_electricity_cost` to a dashboard
 
 ## Sensor output
 
-`sensor.enemalta_electricity_cost` — estimated cost in € for the billing year
-so far. Attributes:
+`sensor.enemalta_electricity_cost` — estimated cost in € for the current
+billing period so far. Attributes:
 
 - `tariff_type` — active tariff
-- `consumption_kwh_ytd` — kWh counted this billing year
-- `gross_cost_eur` — cost before Eco-Reduction / VAT adjustment
-- `current_band` — which cumulative band you're currently in
-- `note` — VAT / Eco-Reduction caveats
+- `consumption_kwh` — kWh counted this billing period
+- `period_days` — days elapsed in the current billing period
+- `band1_allowance_this_period` — pro-rated band-1 allowance, for sanity-checking against a bill
+- `note` — pro-rata / VAT / service-charge / Eco-Reduction caveats
 
 ---
 
@@ -119,29 +142,29 @@ so far. Attributes:
 ## First-run behaviour
 
 The `utility_meter` starts counting from the moment it first runs, so right
-after install it reads **0** (not your meter's lifetime total) and grows from
-there. The cost will start small and accumulate over the billing year. This is
-correct — Enemalta bands are per billing year, not lifetime.
-
-**Reset** at any time (e.g. after fixing a unit mistake) via Developer Tools →
-Actions:
+after install it reads **0** and grows from there. Align it with your bill by
+setting the **Billing Period Start** helper and resetting the meter at the
+start of each ARMS billing period:
 
 ```yaml
 action: utility_meter.reset
 target:
-  entity_id: sensor.enemalta_yearly_energy
+  entity_id: sensor.enemalta_period_energy
 ```
+
+Because the bands are pro-rated by days, the cost tracks your bill throughout
+the period — not just at the endpoints.
 
 ---
 
 ## What's not (yet) included
 
-These are uncommon for a typical home and are intentionally left out to keep
-things simple — PRs welcome:
+Intentionally left out for now — PRs welcome:
 
-- Fixed **annual service charge** (€65 single-phase residential, etc.)
-- **Maximum Demand** tariff (three-phase services > 60 A)
+- **Maximum Demand** tariff (three-phase services > 60 A) — uncommon for homes
 - Non-Residential **day/night** and **kVAh** sub-tariff tables
+
+(The mandatory service charge **is** now included, pro-rated by days.)
 
 ---
 
