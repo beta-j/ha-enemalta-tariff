@@ -1,5 +1,5 @@
 # ============================================================================
-# Enemalta Tariff Cost Calculator — Home Assistant Package — v2.0.0
+# Enemalta Tariff Cost Calculator — Home Assistant Package — v2.1.0
 # ============================================================================
 # Estimates the cost of electricity consumption against Enemalta's (Malta)
 # tariffs, with bands PRO-RATED to your actual billing period (as ARMS bills).
